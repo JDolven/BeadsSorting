@@ -1,14 +1,13 @@
-import cv2
-import numpy as np
 import serial
+import time
 
-# Initialize serial communication (adjust "/dev/ttyS0" and baudrate as needed)
-ser = serial.Serial('/dev/ttyS0', 9600, timeout=1)
-ser.flush()
+# Initialize serial communication with Arduino
+ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+time.sleep(2)  # Wait for the serial connection to initialize
 
-# Define color ranges in HSV
+# Define the color ranges and corresponding color names
 color_ranges = {
-    "red": [(0, 120, 70), (10, 255, 255), (170, 120, 70), (180, 255, 255)],
+    "red": [(0, 120, 70), (10, 255, 255)],
     "green": [(40, 40, 40), (70, 255, 255)],
     "blue": [(90, 50, 50), (130, 255, 255)],
     "yellow": [(20, 100, 100), (30, 255, 255)],
@@ -16,46 +15,42 @@ color_ranges = {
     "purple": [(130, 50, 50), (160, 255, 255)],
     "pink": [(160, 50, 50), (170, 255, 255)],
     "cyan": [(80, 100, 100), (90, 255, 255)],
+    "magenta": [(140, 100, 100), (160, 255, 255)],
     "brown": [(10, 100, 20), (20, 150, 150)],
+    "black": [(0, 0, 0), (180, 255, 50)],
     "white": [(0, 0, 200), (180, 20, 255)],
-    "black": [(0, 0, 0), (180, 255, 50)]
+    "gray": [(0, 0, 100), (180, 50, 200)],
+    "gold": [(20, 150, 150), (30, 255, 255)],
+    "silver": [(0, 0, 160), (180, 10, 200)],
+    "turquoise": [(80, 200, 200), (90, 255, 255)],
+    "navy": [(100, 100, 100), (120, 255, 255)],
+    "unknown": [(0, 0, 0), (180, 255, 255)]  # Default to unknown if nothing matches
 }
 
 def detect_color(frame):
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    for color, ranges in color_ranges.items():
-        for (lower, upper) in zip(ranges[::2], ranges[1::2]):
-            mask = cv2.inRange(hsv_frame, np.array(lower), np.array(upper))
-            if cv2.countNonZero(mask) > 0:
-                return color
+    for color_name, (lower, upper) in color_ranges.items():
+        mask = cv2.inRange(hsv_frame, np.array(lower), np.array(upper))
+        if cv2.countNonZero(mask) > 0:
+            return color_name
     return "unknown"
 
-def main():
-    cap = cv2.VideoCapture(0)  # Replace with your camera index if different
+while True:
+    if ser.in_waiting > 0:
+        line = ser.readline().decode('utf-8').rstrip()
 
-    while True:
-        if ser.in_waiting > 0:
-            line = ser.readline().decode('utf-8').rstrip()
-            if line == "CHECK_COLOR":
-                ret, frame = cap.read()
-                if not ret:
-                    ser.write(b"ERROR\n")
-                    continue
+        if line == "CHECK_COLOR":
+            # Capture frame from the camera (assuming camera setup is done)
+            ret, frame = cap.read()  # Assuming cap is your cv2.VideoCapture object
+            if not ret:
+                ser.write(b"unknown\n")
+                continue
 
-                # Define the region of interest (ROI) where the bead is located
-                roi = frame[100:200, 100:200]  # Example coordinates, adjust as needed
+            color = detect_color(frame)
+            ser.write((color + "\n").encode('utf-8'))
 
-                color = detect_color(roi)
-                ser.write((color + "\n").encode('utf-8'))
-
-        # (Optional) Display the ROI for debugging
-        cv2.imshow("ROI", roi)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
+        elif line == "CHECK_ALIGNMENT":
+            # Handle alignment check
+            # Respond with "ROTOR_ALIGNED" or "NOT_ALIGNED" as needed
+            alignment_status = "ROTOR_ALIGNED"  # Placeholder for actual alignment logic
+            ser.write((alignment_status + "\n").encode('utf-8'))
