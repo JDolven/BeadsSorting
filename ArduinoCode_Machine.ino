@@ -1,5 +1,3 @@
-#include <Wire.h>
-
 // Define motor control pins
 #define EN_X 48
 #define X_DIR 16
@@ -16,6 +14,7 @@
 // Variables for stepper motor control and sorting
 int delayUs = 250;        // Delay for stepper control (X and Y)
 int stepsPerHole = 534;   // Steps to move the disk (X) to the next hole
+int stepsPerDegreeArm = 9; // Fine-tuned steps per degree for the arm
 int currentArmPosition = 0;  // Current position of the sorting arm (in degrees)
 int currentDiskPosition = 0; // Current position of the disk (0 to 5)
 
@@ -38,6 +37,71 @@ int silverPosition = 210;
 int turquoisePosition = 225;
 int navyPosition = 240;
 int unknownPosition = 255;  // Position for undefined color
+
+
+// Function to move the sorting arm (Y) to the desired position
+void moveArmToPosition(int targetPosition) {
+    // Ensure the target position is within the allowed range (0 to 270 degrees)
+    if (targetPosition > 270 || targetPosition < 0) {
+        Serial.println("Error: Target position is out of bounds.");
+        return;
+    }
+
+    int movement = targetPosition - currentArmPosition;
+
+    // Calculate the shortest path within the 0 to 270-degree range
+    if (movement > 135) {
+        // Moving clockwise would exceed 270 degrees, so adjust by moving counterclockwise
+        movement -= 270;
+    } else if (movement < -135) {
+        // Moving counterclockwise would go below 0 degrees, so adjust by moving clockwise
+        movement += 270;
+    }
+
+    // Ensure that the movement stays within the allowed range
+    int newPosition = currentArmPosition + movement;
+    if (newPosition < 0) {
+        newPosition += 270;
+        movement += 270;
+    } else if (newPosition > 270) {
+        newPosition -= 270;
+        movement -= 270;
+    }
+
+    // Debug: Print the calculated movement and direction
+    Serial.print("Moving arm from ");
+    Serial.print(currentArmPosition);
+    Serial.print(" degrees to ");
+    Serial.print(targetPosition);
+    Serial.print(" degrees. Movement: ");
+    Serial.print(movement);
+    Serial.println(" degrees.");
+
+    if (movement == 0) {
+        Serial.println("No movement required, arm already in position.");
+        return;
+    }
+
+    boolean direction = (movement > 0) ? true : false;
+
+    // Calculate the number of steps required for the arm to move
+    long stepsToMove = long(abs(movement)) * long(stepsPerDegreeArm);
+
+    // Debug: Print the direction and steps
+    Serial.print("Direction: ");
+    Serial.println(direction ? "Clockwise" : "Counterclockwise");
+    Serial.print("Steps to move: ");
+    Serial.println(stepsToMove);
+
+    // Perform the movement
+    step(direction, Y_DIR, Y_STP, stepsToMove);
+    currentArmPosition = newPosition;  // Update the current position
+
+    // Debug: Confirm arm movement completion
+    Serial.print("Arm moved to ");
+    Serial.print(currentArmPosition);
+    Serial.println(" degrees.");
+}
 
 // Function to control stepper motors
 void step(boolean dir, byte dirPin, byte stepperPin, int steps) {
@@ -102,55 +166,6 @@ bool checkAlignment() {
     digitalWrite(EN_X, LOW);  // Enable the X stepper motor
 
     return (response == "ROTOR_ALIGNED");
-}
-
-// Function to move the sorting arm (Y) to the desired position
-void moveArmToPosition(int targetPosition) {
-    // Ensure the target position is within the allowed range (0 to 270 degrees)
-    if (targetPosition > 270) {
-        Serial.println("Error: Attempted to move to a restricted position.");
-        return;
-    }
-
-    int movement = targetPosition - currentArmPosition;
-
-    // Normalize movement to the shortest path within 270 degrees
-    if (movement > 135) {  // Adjust for 3/4 circle (270 degrees)
-        movement -= 270;
-    } else if (movement < -135) {
-        movement += 270;
-    }
-
-    // Debug: Print the calculated movement and direction
-    Serial.print("Moving arm from ");
-    Serial.print(currentArmPosition);
-    Serial.print(" degrees to ");
-    Serial.print(targetPosition);
-    Serial.print(" degrees. Movement: ");
-    Serial.print(movement);
-    Serial.println(" degrees.");
-
-    if (movement == 0) {
-        Serial.println("No movement required, arm already in position.");
-        return;
-    }
-
-    boolean direction = (movement > 0) ? true : false;
-    int stepsToMove = abs(movement) * stepsPerHole / 15; // 15 degrees per box
-
-    // Debug: Print the direction and steps
-    Serial.print("Direction: ");
-    Serial.println(direction ? "Clockwise" : "Counterclockwise");
-    Serial.print("Steps to move: ");
-    Serial.println(stepsToMove);
-
-    step(direction, Y_DIR, Y_STP, stepsToMove);
-    currentArmPosition = targetPosition;  // Update the current position
-
-    // Debug: Confirm arm movement completion
-    Serial.print("Arm moved to ");
-    Serial.print(currentArmPosition);
-    Serial.println(" degrees.");
 }
 
 // Function to move the disk (X) to the next hole, including a pause at the drop-off position
