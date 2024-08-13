@@ -24,14 +24,14 @@ int boxPositions[18] = {
 void moveArmToPosition(int targetPosition) {
     // Ensure the target position is within the allowed range (0 to 270 degrees)
     if (targetPosition > 270 || targetPosition < 0) {
-        Serial.println("Error: Target position is out of bounds.");
+        Serial.println("ERROR: Target position is out of bounds.");
         return;
     }
 
     int movement = targetPosition - currentArmPosition;
 
     if (movement == 0) {
-        Serial.println("No movement required, arm already in position.");
+        Serial.println("INFO: No movement required, arm already in position.");
         return;
     }
 
@@ -44,7 +44,7 @@ void moveArmToPosition(int targetPosition) {
     step(direction, Y_DIR, Y_STP, stepsToMove);
     currentArmPosition = targetPosition;  // Update the current position
 
-    Serial.print("Arm moved to ");
+    Serial.print("INFO: Arm moved to ");
     Serial.print(currentArmPosition);
     Serial.println(" degrees.");
 }
@@ -76,6 +76,9 @@ void setup() {
 
     // Enable stepper motors at startup
     enableSteppers();
+
+    // Notify that the system is ready and listening
+    Serial.println("INFO: System ready and listening for commands...");
 }
 
 // Function to process incoming serial commands
@@ -84,80 +87,84 @@ void processSerialCommand(String command) {
 
     if (command.equalsIgnoreCase("DISABLE")) {
         disableSteppers();
+        Serial.println("INFO: Steppers disabled.");
     } else if (command.equalsIgnoreCase("ENABLE")) {
         enableSteppers();
+        Serial.println("INFO: Steppers enabled.");
     } else if (command.startsWith("DISK")) {
         int rotations = command.substring(4).toInt();
         if (rotations > 0) {
             diskRotations = rotations;
-            Serial.print("Starting disk rotation with ");
+            performDiskRotations(diskRotations);
+            Serial.print("INFO: Disk rotation complete with ");
             Serial.print(diskRotations);
             Serial.println(" moves.");
-            performDiskRotations(diskRotations);
         } else {
-            Serial.println("Invalid number of rotations for disk.");
+            Serial.println("ERROR: Invalid number of rotations for disk.");
         }
     } else if (command.startsWith("ARM")) {
         int boxNumber = command.substring(3).toInt();
         if (boxNumber >= 1 && boxNumber <= 18) {
             // Get the target position based on the box number
             int targetPosition = boxPositions[boxNumber - 1];
-
-            // Move the arm to the target position
             moveArmToPosition(targetPosition);
+            Serial.print("INFO: Arm moved to box ");
+            Serial.println(boxNumber);
         } else {
-            Serial.println("Invalid command or box number.");
+            Serial.println("ERROR: Invalid command or box number.");
         }
-    } else if (command.startsWith("STEP_DISK")) {
-        int steps = command.substring(9).toInt();
+    } else if (command.startsWith("X_STEP")) {
+        int steps = command.substring(6).toInt();
         if (steps != 0) {
-            boolean direction = (steps < 0);
+            boolean direction = (steps > 0);
             step(direction, X_DIR, X_STP, abs(steps));
-            Serial.print("X stepper moved ");
+            Serial.print("INFO: X stepper moved ");
             Serial.print(abs(steps));
             Serial.println(" steps.");
         } else {
-            Serial.println("Invalid step count for X stepper.");
+            Serial.println("ERROR: Invalid step count for X stepper.");
         }
-    } else if (command.startsWith("STEP_ARM")) {
-        int steps = command.substring(8).toInt();
+    } else if (command.startsWith("Y_STEP")) {
+        int steps = command.substring(6).toInt();
         if (steps != 0) {
             boolean direction = (steps > 0);
             step(direction, Y_DIR, Y_STP, abs(steps));
-            Serial.print("Y stepper moved ");
+            Serial.print("INFO: Y stepper moved ");
             Serial.print(abs(steps));
             Serial.println(" steps.");
         } else {
-            Serial.println("Invalid step count for Y stepper.");
+            Serial.println("ERROR: Invalid step count for Y stepper.");
         }
     } else {
         int boxNumber = command.toInt();
         if (boxNumber >= 1 && boxNumber <= 18) {
             // Get the target position based on the box number
             int targetPosition = boxPositions[boxNumber - 1];
-
-            // Move the arm to the target position
             moveArmToPosition(targetPosition);
             // After moving the arm, rotate the disk with a 1-second delay
             moveDiskToNextHole(1000);
+            Serial.print("INFO: Arm moved to box ");
+            Serial.print(boxNumber);
+            Serial.println(" and disk rotated.");
         } else {
-            Serial.println("Invalid command or box number.");
+            Serial.println("ERROR: Invalid command or box number.");
         }
     }
+
+    // Notify that the system is ready for the next command
+    Serial.println("WAITING: Listening for next command...");
 }
 
 // Function to disable both X and Y stepper motors
 void disableSteppers() {
     digitalWrite(EN_X, HIGH);  // Disable the X stepper motor
     digitalWrite(EN_Y, HIGH);  // Disable the Y stepper motor
-    Serial.println("Steppers disabled.");
 }
 
 // Function to enable both X and Y stepper motors
 void enableSteppers() {
     digitalWrite(EN_X, LOW);  // Enable the X stepper motor
     digitalWrite(EN_Y, LOW);  // Enable the Y stepper motor
-    Serial.println("Steppers enabled.");
 }
 
 // Function to perform a series of disk rotations with zero delay
@@ -165,7 +172,6 @@ void performDiskRotations(int rotations) {
     for (int i = 0; i < rotations; i++) {
         moveDiskToNextHole(0);  // Perform rotation with zero delay
     }
-    Serial.println("Disk rotations completed.");
 }
 
 // Function to move the disk (X) to the next hole, with a specified delay
