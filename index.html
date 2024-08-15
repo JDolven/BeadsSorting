@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Machine Control Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            font-size: 16px;
+            text-align: center;
+        }
+        #video-feed {
+            display: block;
+            margin: 20px auto;
+            max-width: 640px;
+            border: 2px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Machine Control Interface</h1>
+    
+    <div class="controls">
+        <button onclick="sendCommand('ENABLE')">Enable Steppers</button>
+        <button onclick="sendCommand('DISABLE')">Disable Steppers</button>
+        <button onclick="toggleColorDetection('start')">Start Color Detection</button>
+        <button onclick="toggleColorDetection('stop')">Stop Color Detection</button>
+        <button onclick="toggleTest('start')">Start Testing</button>
+        <button onclick="toggleTest('stop')">Stop Testing</button>
+    </div>
+
+    <div class="controls">
+        <button onclick="sendCommandWithInput('ARM')">Move Arm to Box</button>
+        <input type="number" id="armValue" placeholder="Box No.">
+
+        <button onclick="sendCommandWithInput('DISK')">Rotate Disk</button>
+        <input type="number" id="diskValue" placeholder="Rotations">
+
+        <button onclick="sendCommandWithInput('X_STEP')">X Step</button>
+        <input type="number" id="xStepValue" placeholder="Steps">
+
+        <button onclick="sendCommandWithInput('Y_STEP')">Y Step</button>
+        <input type="number" id="yStepValue" placeholder="Steps">
+
+        <button onclick="sendCommandWithInput('MOVE_BOX')">Move to Box</button>
+        <input type="number" id="moveBoxValue" placeholder="Box No.">
+    </div>
+
+    <div class="controls">
+        <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+    </div>
+
+    <script>
+        function sendCommand(type, value = null) {
+            const data = { type: type };
+            if (value !== null) {
+                data.value = value;
+            }
+
+            fetch('/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Command response:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function sendCommandWithInput(type) {
+            let value;
+            if (type === 'ARM') {
+                value = document.getElementById('armValue').value;
+            } else if (type === 'DISK') {
+                value = document.getElementById('diskValue').value;
+            } else if (type === 'X_STEP') {
+                value = document.getElementById('xStepValue').value;
+            } else if (type === 'Y_STEP') {
+                value = document.getElementById('yStepValue').value;
+            } else if (type === 'MOVE_BOX') {
+                value = document.getElementById('moveBoxValue').value;
+            }
+
+            if (value) {
+                sendCommand(type, value);
+            } else {
+                alert('Please enter a value.');
+            }
+        }
+
+        function toggleColorDetection(action) {
+            fetch('/color_detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: action }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Color detection response:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function toggleTest(action) {
+            fetch('/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: action }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Test response:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
