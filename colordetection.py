@@ -77,52 +77,56 @@ def clear_machine_status():
     logging.info("Machine status cleared.")
 
 def identify_color(frame):
-    # Convert the entire frame to HSV color space
+    # Convert the frame to HSV color space
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-    # Define the area (ROI) where you want to check for color
+    
+    # Define the area (ROI) in the center of the frame
     height, width = hsv_frame.shape[:2]
     center_x, center_y = width // 2, height // 2
-    region_size = 100  # Define the size of the area (e.g., 100x100 pixels)
+    region_size = 10  # Half of 20x20 region size
 
-    # Extract the ROI
+    # Extract the 20x20 pixel region in the center of the frame
     roi = hsv_frame[center_y-region_size:center_y+region_size, center_x-region_size:center_x+region_size]
-
+    
+    detected_box_number = None
+    detected_color_name = "Unknown"
+    
     # Loop through the color ranges to find a match within the ROI
     for box, (lower, upper, color_name) in color_ranges.items():
-        lower_bound = tuple(lower)
-        upper_bound = tuple(upper)
+        lower_bound = np.array(lower)
+        upper_bound = np.array(upper)
         mask = cv2.inRange(roi, lower_bound, upper_bound)
+        
         if cv2.countNonZero(mask) > 0:
-            box_number = box.split('_')[-1]  # Extract the box number (e.g., "1" from "box_1")
-            return box_number, color_name, (center_x-region_size, center_y-region_size, center_x+region_size, center_y+region_size)
+            detected_box_number = box.split('_')[-1]  # Extract the box number
+            detected_color_name = color_name
+            break
+    
+    # Return the final detected box number and color name, along with the ROI coordinates
+    return detected_box_number, detected_color_name, (center_x-region_size, center_y-region_size, center_x+region_size, center_y+region_size)
 
-    logging.info("No matching color found, defaulting to box 18")
-    return "18", "Unknown", (center_x-region_size, center_y-region_size, center_x+region_size, center_y+region_size)
 
 def color_detection_loop():
     global color_detection_active
-    
-    # Move to box 1 at the start of the loop
-    logging.info("Moving to box 1 at the start of color detection")
 
     while color_detection_active:
-        # Wait for the machine to publish its status
         status = ser.readline().decode('utf-8').strip()
         logging.info(f"Received machine status: {status}")
         if status == "WAITING: Listening for next command...":
             clear_machine_status()  # Clear status after sending the command
-            # Only capture a frame and move to the corresponding box when the machine is ready
+            
             ret, frame = camera.read()
             if ret:
                 box_number, color_name, _ = identify_color(frame)  # Discard the ROI coordinates
                 logging.info(f"Color: {color_name}")
                 move_to_box(box_number)  # Only send the box number to the machine
+                
+                # Introduce a delay to avoid overlapping commands
+                time.sleep(2)  # Adjust the sleep time based on the machine's response time
 
         # Wait a bit before checking again to avoid unnecessary load
         time.sleep(0.5)
 
-    logging.info("Color detection loop ended.")
 
 
 def test_loop():
@@ -147,8 +151,8 @@ def toggle_color_detection():
         logging.info("Starting color detection...")
 
         # Move the arm to box 1 before starting the color detection loop
-        move_to_box("1")
-
+        send_command("ARM 1", retries=1)
+        time.sleep(5)
         color_detection_active = True
         color_detection_thread = threading.Thread(target=color_detection_loop)
         color_detection_thread.start()
