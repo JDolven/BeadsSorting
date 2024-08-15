@@ -8,7 +8,7 @@
 
 // Variables for stepper motor control and sorting
 int delayUs = 250;        // Delay for stepper control (X and Y)
-int stepsPerHole = 534;   // Steps to move the disk (X) to the next hole
+int stepsPerHole = 533;   // Steps to move the disk (X) to the next hole
 int stepsPerDegreeArm = 9; // Fine-tuned steps per degree for the arm
 int currentArmPosition = 0;  // Current position of the sorting arm (in degrees)
 int currentDiskPosition = 0; // Current position of the disk (0 to 5)
@@ -183,10 +183,8 @@ void moveDiskToNextHole(int delayTime) {
 
     delay(delayTime);  // Pause to let the bead fall out or perform action
 
-    step(false, X_DIR, X_STP, stepsToDropOff);  // Rotate the remaining steps to the next hole
+    step(false, X_DIR, X_STP, stepsToDropOff+1);  // Rotate the remaining steps to the next hole
     currentDiskPosition = (currentDiskPosition + 1) % 6;  // Update the position (0 to 5)
-
-
 }
 
 // Main loop
