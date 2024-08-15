@@ -146,6 +146,8 @@ void processSerialCommand(String command) {
             Serial.print("INFO: Arm moved to box ");
             Serial.print(boxNumber);
             Serial.println(" and disk rotated.");
+            delay(500);  // Adjust delay as needed for bead drop-off
+
         } else {
             Serial.println("ERROR: Invalid command or box number.");
         }
@@ -183,6 +185,8 @@ void moveDiskToNextHole(int delayTime) {
 
     step(false, X_DIR, X_STP, stepsToDropOff);  // Rotate the remaining steps to the next hole
     currentDiskPosition = (currentDiskPosition + 1) % 6;  // Update the position (0 to 5)
+
+
 }
 
 // Main loop
@@ -194,5 +198,4 @@ void loop() {
     }
 
     // Drop off the bead as the disk continues to rotate
-    delay(1000);  // Adjust delay as needed for bead drop-off
 }
