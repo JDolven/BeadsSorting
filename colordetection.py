@@ -6,8 +6,12 @@ import logging
 import numpy as np
 from flask import Flask, request, jsonify, Response, render_template
 import random
+import os  # Add this import to handle directories
 
 app = Flask(__name__)
+
+#Save pictures to file
+Save_pictures= False
 
 # Initialize serial communication
 ser = serial.Serial('COM4', 9600, timeout=1)
@@ -22,6 +26,8 @@ camera = cv2.VideoCapture(0)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
 
 # Color ranges for identification (example values)
 color_ranges = {
@@ -61,8 +67,13 @@ def send_command(command, retries=1):
     return "ERROR: Failed to send command after retries"
 
 
-def move_to_box(box_number, color_name=None):
-    return send_command(box_number)  # Send only the box number as a string
+def move_to_box(box_number, color_name=None, frame=None, roi_coords=None):
+    """Send the command to move to a box and save the cropped image."""
+    response = send_command(box_number)  # Send only the box number as a string
+    if frame is not None and color_name is not None and roi_coords is not None and Save_pictures:
+        save_image(frame, color_name, roi_coords)
+    return response
+
 
 def get_machine_status():
     logging.info("Checking machine status...")
@@ -105,6 +116,28 @@ def identify_color(frame):
     # Return the final detected box number and color name, along with the ROI coordinates
     return detected_box_number, detected_color_name, (center_x-region_size, center_y-region_size, center_x+region_size, center_y+region_size)
 
+def create_color_directories():
+    for _, _, color_name in color_ranges.values():
+        directory = os.path.join("bead_images", color_name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+def save_image(frame, color_name, roi_coords):
+    """Save the cropped image of the ROI to the corresponding color folder."""
+    directory = os.path.join("bead_images", color_name)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"{color_name}_{timestamp}.jpg"
+    filepath = os.path.join(directory, filename)
+
+    # Crop the frame to the ROI
+    (start_x, start_y, end_x, end_y) = roi_coords
+    cropped_frame = frame[start_y-100:end_y+100, start_x-100:end_x+100]
+
+    # Save the cropped image
+    cv2.imwrite(filepath, cropped_frame)
+    logging.info(f"Saved cropped image to {filepath}")
+
+
 
 def color_detection_loop():
     global color_detection_active
@@ -117,9 +150,9 @@ def color_detection_loop():
             
             ret, frame = camera.read()
             if ret:
-                box_number, color_name, _ = identify_color(frame)  # Discard the ROI coordinates
+                box_number, color_name, roi_coords = identify_color(frame)  # Capture the ROI coordinates
                 logging.info(f"Color: {color_name}")
-                move_to_box(box_number)  # Only send the box number to the machine
+                move_to_box(box_number, color_name, frame, roi_coords)  # Pass the frame and ROI coordinates
                 
                 # Introduce a delay to avoid overlapping commands
                 time.sleep(2)  # Adjust the sleep time based on the machine's response time
@@ -249,4 +282,6 @@ def video_feed():
 
 
 if __name__ == '__main__':
+    # Call this function once at the start
+    create_color_directories()
     app.run(debug=False)
