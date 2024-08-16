@@ -2,7 +2,7 @@
 
 Welcome to the Bead Sorting Machine project! This repository contains the code and resources for building and programming a bead sorting machine, designed to automatically identify and sort beads by color.
 
-The bead sorting machine is built using 3D-printed mechanical parts, an Arduino-compatible Rumba board for motor control, and a Raspberry Pi 3 with a webcam for color detection. The system is designed to sort beads by color, with two stepper motors handling the mechanical movement, and image processing algorithms determining the bead color from the webcam feed.
+The bead sorting machine is built using 3D-printed mechanical parts, an Arduino-compatible Rumba board for motor control, and a PC 3 with a webcam for color detection. The system is designed to sort beads by color, with two stepper motors handling the mechanical movement, and image processing algorithms determining the bead color from the webcam feed.
 
 # Hardware Components
 ## 3D-Printed Parts
