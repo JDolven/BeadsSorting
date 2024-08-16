@@ -8,8 +8,8 @@
 
 // Variables for stepper motor control and sorting
 int delayUs = 250;        // Delay for stepper control (X and Y)
-int stepsPerHole = 533;   // Steps to move the disk (X) to the next hole
-int stepsPerDegreeArm = 9; // Fine-tuned steps per degree for the arm
+int stepsPerHole = 533;   // Steps to move the disk (X) to the next hole, 1.8 deg steper and 32 Microsteps () AND x in disk
+float stepsPerDegreeArm = 8.88888; // 1.8 deg steper and 32 Microsteps ()
 int currentArmPosition = 0;  // Current position of the sorting arm (in degrees)
 int currentDiskPosition = 0; // Current position of the disk (0 to 5)
 int diskRotations = 0;      // Number of rotations for the disk
@@ -38,7 +38,7 @@ void moveArmToPosition(int targetPosition) {
     boolean direction = (movement > 0) ? true : false;
 
     // Calculate the number of steps required for the arm to move
-    long stepsToMove = long(abs(movement)) * long(stepsPerDegreeArm);
+    int stepsToMove = round(abs(movement) * stepsPerDegreeArm);
 
     // Perform the movement
     step(direction, Y_DIR, Y_STP, stepsToMove);
