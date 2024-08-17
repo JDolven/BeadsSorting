@@ -8,8 +8,8 @@
 
 // Variables for stepper motor control and sorting
 int delayUs = 250;        // Delay for stepper control (X and Y)
-int stepsPerHole = 533;   // Steps to move the disk (X) to the next hole, 1.8 deg steper and 32 Microsteps () AND x in disk
-float stepsPerDegreeArm = 8.88888; // 1.8 deg steper and 32 Microsteps ()
+int stepsPerHole = 400;   // Steps to move the disk (X) to the next hole, 1.8 deg steper and 16 Microsteps () AND x holes in disk
+float stepsPerDegreeArm = 8.88888; // 1.8 deg steper and 16 Microsteps ()
 int currentArmPosition = 0;  // Current position of the sorting arm (in degrees)
 int currentDiskPosition = 0; // Current position of the disk (0 to 5)
 int diskRotations = 0;      // Number of rotations for the disk
@@ -116,7 +116,7 @@ void processSerialCommand(String command) {
     } else if (command.startsWith("X_STEP")) {
         int steps = command.substring(6).toInt();
         if (steps != 0) {
-            boolean direction = (steps > 0);
+            boolean direction = (steps < 0);
             step(direction, X_DIR, X_STP, abs(steps));
             Serial.print("INFO: X stepper moved ");
             Serial.print(abs(steps));
@@ -142,7 +142,7 @@ void processSerialCommand(String command) {
             int targetPosition = boxPositions[boxNumber - 1];
             moveArmToPosition(targetPosition);
             // After moving the arm, rotate the disk with a 1-second delay
-            moveDiskToNextHole(1000);
+            moveDiskToNextHole();
             Serial.print("INFO: Arm moved to box ");
             Serial.print(boxNumber);
             Serial.println(" and disk rotated.");
@@ -172,18 +172,13 @@ void enableSteppers() {
 // Function to perform a series of disk rotations with zero delay
 void performDiskRotations(int rotations) {
     for (int i = 0; i < rotations; i++) {
-        moveDiskToNextHole(0);  // Perform rotation with zero delay
+        moveDiskToNextHole();  // Perform rotation with zero delay
     }
 }
 
 // Function to move the disk (X) to the next hole, with a specified delay
-void moveDiskToNextHole(int delayTime) {
-    int stepsToDropOff = stepsPerHole / 2;  // Half the steps to the next hole
-    step(false, X_DIR, X_STP, stepsToDropOff);  // Rotate to the drop-off position
-
-    delay(delayTime);  // Pause to let the bead fall out or perform action
-
-    step(false, X_DIR, X_STP, stepsToDropOff+1);  // Rotate the remaining steps to the next hole
+void moveDiskToNextHole() {
+    step(false, X_DIR, X_STP, stepsPerHole);  // Rotate the remaining steps to the next hole
     currentDiskPosition = (currentDiskPosition + 1) % 6;  // Update the position (0 to 5)
 }
 
