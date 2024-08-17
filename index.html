@@ -44,10 +44,12 @@
         <button onclick="sendCommand('DISABLE')">Disable Steppers</button>
         <button onclick="toggleColorDetection('start')">Start Color Detection</button>
         <button onclick="toggleColorDetection('stop')">Stop Color Detection</button>
-        <button onclick="toggleTest('start')">Start Testing</button>
-        <button onclick="toggleTest('stop')">Stop Testing</button>
     </div>
 
+    <div class="controls">
+        <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+    </div>
+    
     <div class="controls">
         <button onclick="sendCommandWithInput('ARM')">Move Arm to Box</button>
         <input type="number" id="armValue" placeholder="Box No.">
@@ -55,19 +57,17 @@
         <button onclick="sendCommandWithInput('DISK')">Rotate Disk</button>
         <input type="number" id="diskValue" placeholder="Rotations">
 
-        <button onclick="sendCommandWithInput('X_STEP')">X Step</button>
+        <button onclick="sendCommandWithInput('X_STEP')">Step Disk</button>
         <input type="number" id="xStepValue" placeholder="Steps">
 
-        <button onclick="sendCommandWithInput('Y_STEP')">Y Step</button>
+        <button onclick="sendCommandWithInput('Y_STEP')">Step ARM</button>
         <input type="number" id="yStepValue" placeholder="Steps">
 
         <button onclick="sendCommandWithInput('MOVE_BOX')">Move to Box</button>
         <input type="number" id="moveBoxValue" placeholder="Box No.">
     </div>
 
-    <div class="controls">
-        <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed">
-    </div>
+
 
     <script>
         function sendCommand(type, value = null) {
@@ -130,22 +130,7 @@
             });
         }
 
-        function toggleTest(action) {
-            fetch('/test', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action: action }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Test response:', data);
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-            });
-        }
+
     </script>
 </body>
 </html>
