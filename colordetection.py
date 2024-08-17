@@ -5,13 +5,12 @@ import time
 import logging
 import numpy as np
 from flask import Flask, request, jsonify, Response, render_template
-import random
 import os  # Add this import to handle directories
 
 app = Flask(__name__)
 
 #Save pictures to file
-Save_pictures= False
+Save_pictures= True
 
 # Initialize serial communication
 ser = serial.Serial('COM4', 9600, timeout=1)
@@ -19,15 +18,12 @@ ser = serial.Serial('COM4', 9600, timeout=1)
 # Global flag for color detection and testing status
 color_detection_active = False
 color_detection_thread = None
-test_active = False
 
 # Initialize camera
 camera = cv2.VideoCapture(0)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
 
 # Color ranges for identification (example values)
 color_ranges = {
@@ -66,14 +62,12 @@ def send_command(command, retries=1):
          # Wait before retrying
     return "ERROR: Failed to send command after retries"
 
-
 def move_to_box(box_number, color_name=None, frame=None, roi_coords=None):
     """Send the command to move to a box and save the cropped image."""
     response = send_command(box_number)  # Send only the box number as a string
     if frame is not None and color_name is not None and roi_coords is not None and Save_pictures:
         save_image(frame, color_name, roi_coords)
     return response
-
 
 def get_machine_status():
     logging.info("Checking machine status...")
@@ -94,9 +88,9 @@ def identify_color(frame):
     # Define the area (ROI) in the center of the frame
     height, width = hsv_frame.shape[:2]
     center_x, center_y = width // 2, height // 2
-    region_size = 10  # Half of 20x20 region size
+    region_size = 10  # Half of XXxXX region size
 
-    # Extract the 20x20 pixel region in the center of the frame
+    # Extract the XXxXX pixel region in the center of the frame
     roi = hsv_frame[center_y-region_size:center_y+region_size, center_x-region_size:center_x+region_size]
     
     detected_box_number = None
@@ -137,8 +131,6 @@ def save_image(frame, color_name, roi_coords):
     cv2.imwrite(filepath, cropped_frame)
     logging.info(f"Saved cropped image to {filepath}")
 
-
-
 def color_detection_loop():
     global color_detection_active
 
@@ -155,25 +147,11 @@ def color_detection_loop():
                 move_to_box(box_number, color_name, frame, roi_coords)  # Pass the frame and ROI coordinates
                 
                 # Introduce a delay to avoid overlapping commands
-                time.sleep(2)  # Adjust the sleep time based on the machine's response time
+                #time.sleep(2)  # Adjust the sleep time based on the machine's response time
 
         # Wait a bit before checking again to avoid unnecessary load
         time.sleep(0.5)
 
-
-
-def test_loop():
-    global test_active
-    while test_active:
-        status = ser.readline().decode('utf-8').strip()
-        if "WAITING" in status:
-            logging.info("Machine is ready, selecting a random box.")
-            box_number = str(random.randint(1, 18))
-            move_to_box(box_number)  # Send the randomly selected box number to the machine
-            #time.sleep(2)  # Delay to simulate processing time
-        else:
-            logging.info(f"Received response from machine: {status}")
-        time.sleep(1)  # Small delay to prevent busy-waiting
 
 @app.route('/color_detection', methods=['POST'])
 def toggle_color_detection():
@@ -198,24 +176,6 @@ def toggle_color_detection():
         return jsonify({"status": "Color detection stopped"})
     else:
         return jsonify({"status": "Invalid action or color detection already in desired state"}), 400
-
-
-@app.route('/test', methods=['POST'])
-def toggle_test():
-    global test_active
-    action = request.json.get("action")
-
-    if action == "start" and not test_active:
-        logging.info("Starting test...")
-        test_active = True
-        threading.Thread(target=test_loop).start()
-        return jsonify({"status": "Test started"})
-    elif action == "stop" and test_active:
-        logging.info("Stopping test...")
-        test_active = False
-        return jsonify({"status": "Test stopped"})
-    else:
-        return jsonify({"status": "Invalid action or test already in desired state"}), 400
 
 @app.route('/command', methods=['POST'])
 def command():
@@ -279,7 +239,6 @@ def video_feed():
                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
 
 if __name__ == '__main__':
     # Call this function once at the start
