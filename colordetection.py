@@ -3,6 +3,7 @@ import cv2
 import threading
 import time
 import logging
+import math
 import numpy as np
 from flask import Flask, request, jsonify, Response, render_template
 import os  # Add this import to handle directories
@@ -19,13 +20,20 @@ ser = serial.Serial('COM4', 9600, timeout=1)
 color_detection_active = False
 color_detection_thread = None
 
+# Variables to keep track of the machine
+current_arm_position = 0
+steps_per_degree_arm = 8.88888  # Step calculation based on 1.8 degree stepper and 16 microsteps
+steps_per_hole = 400 # Step calculation based on 1.8 degree stepper and 16 microsteps and totalt of 8 holes in disk
+current_disk_position = 0
+
+
 # Initialize camera
 camera = cv2.VideoCapture(0)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Color ranges for identification (example values)
+# Color ranges for identification
 color_ranges = {
     "box_1": ([0, 100, 100], [10, 255, 255], "Red"),          # Red
     "box_2": ([36, 100, 100], [86, 255, 255], "Green"),       # Green
@@ -46,7 +54,17 @@ color_ranges = {
     "box_17": ([85, 100, 100], [95, 255, 255], "Teal"),       # Teal
     "box_18": ([0, 0, 0], [255, 255, 255], "Unknown")         # Default for unknown colors
 }
+# Box position in deg for box 1 to 18 (array item 0-17)
+box_positions = [
+    0, 15, 30, 45, 60, 75, 90, 105, 120, 
+    135, 150, 165, 180, 195, 210, 225, 240, 255
+]
 
+def create_color_directories():
+    for _, _, color_name in color_ranges.values():
+        directory = os.path.join("bead_images", color_name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
 def send_command(command, retries=1):
     for attempt in range(retries):
@@ -64,7 +82,8 @@ def send_command(command, retries=1):
 
 def move_to_box(box_number, color_name=None, frame=None, roi_coords=None):
     """Send the command to move to a box and save the cropped image."""
-    response = send_command(box_number)  # Send only the box number as a string
+    response = move_arm_to_position(box_positions[box_number]-1)
+    response = move_disk_to_next_hole()
     if frame is not None and color_name is not None and roi_coords is not None and Save_pictures:
         save_image(frame, color_name, roi_coords)
     return response
@@ -81,55 +100,73 @@ def clear_machine_status():
         ser.readline()  # Read and discard any remaining data in the buffer
     logging.info("Machine status cleared.")
 
+def move_arm_to_position(target_position):
+    global current_arm_position
+    
+    movement = target_position - current_arm_position
+
+    if movement == 0:
+        print("INFO: No movement required, arm already in position.")
+        return
+    
+    # Calculate the number of steps required for the arm to move
+    steps_to_move = round(movement * steps_per_degree_arm)
+
+    # Perform the movement
+    send_command(f"Y_STEP {steps_to_move}")
+    
+    current_arm_position = target_position  # Update the current position
+    print(f"INFO: Arm moved to {current_arm_position} degrees.")
+
+def move_disk_to_next_hole():
+    global current_disk_position
+    
+    # Perform the movement to the next hole
+    send_command(f"X_STEP {steps_per_hole}")
+    
+    # Update the position (0 to 5)
+    current_disk_position = (current_disk_position + 1) % 6
+
+    print(f"INFO: Disk moved to position {current_disk_position}.")
+
 def identify_color(frame):
     # Convert the frame to HSV color space
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
+
     # Define the area (ROI) in the center of the frame
     height, width = hsv_frame.shape[:2]
     center_x, center_y = width // 2, height // 2
-    region_size = 10  # Half of XXxXX region size
+    region_size = 10  # Half of 20x20 region size
 
-    # Extract the XXxXX pixel region in the center of the frame
-    roi = hsv_frame[center_y-region_size:center_y+region_size, center_x-region_size:center_x+region_size]
-    
+    # Extract the 20x20 pixel region in the center of the frame
+    roi = hsv_frame[center_y - region_size:center_y + region_size, center_x - region_size:center_x + region_size]
+
+    # Also, extract the corresponding BGR region
+    roi_bgr = frame[center_y - region_size:center_y + region_size, center_x - region_size:center_x + region_size]
+
+    # Calculate the average RGB values in the ROI
+    avg_bgr = cv2.mean(roi_bgr)[:3]  # Get the BGR values
+    avg_rgb = avg_bgr[::-1]  # Convert BGR to RGB
+
+    # Log the average RGB values
+    logging.info(f"Average RGB values: {avg_rgb}")
+
     detected_box_number = None
     detected_color_name = "Unknown"
-    
+
     # Loop through the color ranges to find a match within the ROI
     for box, (lower, upper, color_name) in color_ranges.items():
         lower_bound = np.array(lower)
         upper_bound = np.array(upper)
         mask = cv2.inRange(roi, lower_bound, upper_bound)
-        
+
         if cv2.countNonZero(mask) > 0:
             detected_box_number = box.split('_')[-1]  # Extract the box number
             detected_color_name = color_name
             break
-    
+
     # Return the final detected box number and color name, along with the ROI coordinates
-    return detected_box_number, detected_color_name, (center_x-region_size, center_y-region_size, center_x+region_size, center_y+region_size)
-
-def create_color_directories():
-    for _, _, color_name in color_ranges.values():
-        directory = os.path.join("bead_images", color_name)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-def save_image(frame, color_name, roi_coords):
-    """Save the cropped image of the ROI to the corresponding color folder."""
-    directory = os.path.join("bead_images", color_name)
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    filename = f"{color_name}_{timestamp}.jpg"
-    filepath = os.path.join(directory, filename)
-
-    # Crop the frame to the ROI
-    (start_x, start_y, end_x, end_y) = roi_coords
-    cropped_frame = frame[start_y-100:end_y+100, start_x-100:end_x+100]
-
-    # Save the cropped image
-    cv2.imwrite(filepath, cropped_frame)
-    logging.info(f"Saved cropped image to {filepath}")
+    return detected_box_number, detected_color_name, (center_x - region_size, center_y - region_size, center_x + region_size, center_y + region_size)
 
 def color_detection_loop():
     global color_detection_active
@@ -139,7 +176,7 @@ def color_detection_loop():
         logging.info(f"Received machine status: {status}")
         if status == "WAITING: Listening for next command...":
             clear_machine_status()  # Clear status after sending the command
-            
+            time.sleep(0.5) # Delay between movments, to prevent the arm from trowing beads.. 
             ret, frame = camera.read()
             if ret:
                 box_number, color_name, roi_coords = identify_color(frame)  # Capture the ROI coordinates
@@ -152,6 +189,20 @@ def color_detection_loop():
         # Wait a bit before checking again to avoid unnecessary load
         time.sleep(0.5)
 
+def save_image(frame, color_name, roi_coords):
+    """Save the cropped image of the ROI to the corresponding color folder."""
+    directory = os.path.join("bead_images", color_name)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"{timestamp}.jpg"
+    filepath = os.path.join(directory, filename)
+
+    # Crop the frame to the ROI
+    (start_x, start_y, end_x, end_y) = roi_coords
+    cropped_frame = frame[start_y-100:end_y+100, start_x-100:end_x+100]
+
+    # Save the cropped image
+    cv2.imwrite(filepath, cropped_frame)
+    logging.info(f"Saved cropped image to {filepath}")
 
 @app.route('/color_detection', methods=['POST'])
 def toggle_color_detection():
@@ -162,8 +213,7 @@ def toggle_color_detection():
         logging.info("Starting color detection...")
 
         # Move the arm to box 1 before starting the color detection loop
-        send_command("ARM 1", retries=1)
-        time.sleep(5)
+
         color_detection_active = True
         color_detection_thread = threading.Thread(target=color_detection_loop)
         color_detection_thread.start()
@@ -243,4 +293,4 @@ def video_feed():
 if __name__ == '__main__':
     # Call this function once at the start
     create_color_directories()
-    app.run(debug=False)
+    app.run(debug=False, host='0.0.0.0', port=5000)
